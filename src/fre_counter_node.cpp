@@ -136,14 +136,14 @@ public:
 					double rel_rotation=get_rel_rotation(last_robot_pose,robot_start_pose);
 					rel_rotation=sqrt(rel_rotation*rel_rotation);//get abs value
 					std::cout<<"robot pose x:"<<msg->pose[i].position.x <<" y:"<<msg->pose[i].position.y<<"  rel rot: "<<rel_rotation<<" [°]"<<std::endl;
-					if(rel_rotation>50 &&rel_rotation<150) //check if we are right now on the headland turn:
+					if(rel_rotation>70 &&rel_rotation<160) //check if we are right now on the headland turn:
 					{
 						std::cout<<"on headland"<<std::endl;
 						//update row counter plus one 
 						headland_navigation=true;
 						//take care that the dist. is not counted until the robot has finished the turning.
 					}
-					if(rel_rotation>=150)
+					if(rel_rotation>=160)
 					{
 						//move up row counter and reset robot start_pose;
 						row_counter++;
