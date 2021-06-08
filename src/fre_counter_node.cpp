@@ -96,7 +96,7 @@ public:
 						float plant_dist=sqrt((msg->pose[i].position.x-start_model_stages.pose[i].position.x)*(msg->pose[i].position.x-start_model_stages.pose[i].position.x)+(msg->pose[i].position.y-start_model_stages.pose[i].position.y)*(msg->pose[i].position.y-start_model_stages.pose[i].position.y));
 						
 						
-						if(plant_dist>0.05)//if plant was moved more than x cm //maybe include here later the orientation of the stem?
+						if(plant_dist>0.01)//if plant was moved more than x cm //maybe include here later the orientation of the stem?
 						{
 							//std::cout<<"the plant nr. "<<i<<" was moved!"<<std::endl;
 							moved_plants++;
