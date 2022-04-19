@@ -60,108 +60,110 @@ namespace fre_counter
     {
         info_msg.header.stamp = ros::Time::now();
 
+        bool found_robot = false;
+
         // Check how many objects are found
 
         // std::cout<<"got state of: "<<msg->name.size() <<" objects in gazebo"<<std::endl;
-        try
+
+        int plant_counter = 0;
+        int moved_plants = 0;
+        for (int i = 0; i < msg->name.size(); i++)
         {
-            int plant_counter = 0;
-            int moved_plants = 0;
-            for (int i = 0; i < msg->name.size(); i++)
+            // check for plants
+            if (msg->name[i].find("maize") != std::string::npos)
             {
-                // check for plants
-                if (msg->name[i].find("maize") != std::string::npos)
+                // std::cout << "found maize!" << '\n';
+                plant_counter++;
+                if (got_first_model_stages) // Check if we can compare something until now
                 {
-                    // std::cout << "found maize!" << '\n';
-                    plant_counter++;
-                    if (got_first_model_stages) // Check if we can compare something until now
+                    // Check if plant changed position since first stage
+                    float plant_dist = sqrt((msg->pose[i].position.x - start_model_stages.pose[i].position.x) * (msg->pose[i].position.x - start_model_stages.pose[i].position.x) + (msg->pose[i].position.y - start_model_stages.pose[i].position.y) * (msg->pose[i].position.y - start_model_stages.pose[i].position.y));
+
+                    if (plant_dist > 0.01) // If plant was moved more than x cm //maybe include here later the orientation of the stem?
                     {
-                        // Check if plant changed position since first stage
-                        float plant_dist = sqrt((msg->pose[i].position.x - start_model_stages.pose[i].position.x) * (msg->pose[i].position.x - start_model_stages.pose[i].position.x) + (msg->pose[i].position.y - start_model_stages.pose[i].position.y) * (msg->pose[i].position.y - start_model_stages.pose[i].position.y));
-
-                        if (plant_dist > 0.01) // If plant was moved more than x cm //maybe include here later the orientation of the stem?
-                        {
-                            // std::cout<<"the plant nr. "<<i<<" was moved!"<<std::endl;
-                            moved_plants++;
-                        }
+                        // std::cout<<"the plant nr. "<<i<<" was moved!"<<std::endl;
+                        moved_plants++;
                     }
-                }
-
-                if (msg->name[i] == robot_name)
-                {
-
-                    geometry_msgs::PoseStamped point;
-                    point.header.stamp = ros::Time::now();
-                    point.header.frame_id = "odom"; // Push path to odom frame
-                    point.pose = msg->pose[i];
-
-                    path_msg.header.stamp = ros::Time::now();
-                    path_msg.poses.push_back(point); // Push back actual position to pose
-
-                    if (got_first_model_stages) // Check if we can compare something until now
-                    {
-                        // We can start to compare the distance
-                        float dist_travel = sqrt((msg->pose[i].position.x - last_robot_pose.position.x) * (msg->pose[i].position.x - last_robot_pose.position.x) + (msg->pose[i].position.y - last_robot_pose.position.y) * (msg->pose[i].position.y - last_robot_pose.position.y));
-                        if (dist_travel > 0.1) // Add dist to robot_distance traveled and reset last_robot_pose;
-                        {
-                            if (!headland_navigation)
-                            {                                                                                 // Add distance to traveled distance if the robot is not on headland navigation
-                                dist_robot_travel = round(100.0 * (dist_robot_travel + dist_travel)) / 100.0; // Round distance to cm.
-                                actual_row = round(100.0 * (actual_row + dist_travel)) / 100.0;               // calculate for this row
-                            }
-                            last_robot_pose = msg->pose[i]; // Write back last robot pose for next iteration
-                        }
-                    }
-                    else
-                    {
-                        // Dave robot start position if this is the first message recieved
-                        last_robot_pose = msg->pose[i];
-                        robot_start_pose = msg->pose[i];
-                    }
-
-                    // Check if we detected a headland turn.
-                    double rel_rotation = getRelRotation(last_robot_pose, robot_start_pose);
-                    rel_rotation = sqrt(rel_rotation * rel_rotation); // get abs value
-                    std::cout << "robot pose x:" << msg->pose[i].position.x << " y:" << msg->pose[i].position.y << "  rel rot: " << rel_rotation << " [°]" << std::endl;
-
-                    if (rel_rotation > 70 && rel_rotation < 160) // check if we are right now on the headland turn:
-                    {
-                        std::cout << "on headland" << std::endl;
-                        // Update row counter plus one
-                        headland_navigation = true;
-                        // Take care that the dist. is not counted until the robot has finished the turning.
-                    }
-
-                    if (rel_rotation >= 160)
-                    {
-                        // Move up row counter and reset robot start_pose;
-                        row_counter++;
-                        headland_navigation = false;
-                        robot_start_pose = msg->pose[i]; // override robot start pose with actual pose of robot
-                        actual_row = 0;                  // reset distance in actual row
-                    }
-
-                    std::cout << "robot distance total: " << dist_robot_travel << " [m]" << std::endl;
-                    std::cout << "rows finished: " << row_counter << "  distance in actual row: " << actual_row << " [m]" << std::endl;
-
-                    info_msg.rows_finished = row_counter;
-                    info_msg.robot_distance_in_row = actual_row;
-                    info_msg.robot_distance = dist_robot_travel;
                 }
             }
-            std::cout << "Plants destroyed: " << moved_plants << std::endl
-                      << std::endl;
 
-            info_msg.plants_destroyed = moved_plants;
+            if (msg->name[i] == robot_name)
+            {
+                found_robot = true;
 
-            // Publish path and info
-            info_pub.publish(info_msg);
-            path_pub.publish(path_msg);
+                geometry_msgs::PoseStamped point;
+                point.header.stamp = ros::Time::now();
+                point.header.frame_id = "odom"; // Push path to odom frame
+                point.pose = msg->pose[i];
+
+                path_msg.header.stamp = ros::Time::now();
+                path_msg.poses.push_back(point); // Push back actual position to pose
+
+                if (got_first_model_stages) // Check if we can compare something until now
+                {
+                    // We can start to compare the distance
+                    float dist_travel = sqrt((msg->pose[i].position.x - last_robot_pose.position.x) * (msg->pose[i].position.x - last_robot_pose.position.x) + (msg->pose[i].position.y - last_robot_pose.position.y) * (msg->pose[i].position.y - last_robot_pose.position.y));
+                    if (dist_travel > 0.1) // Add dist to robot_distance traveled and reset last_robot_pose;
+                    {
+                        if (!headland_navigation)
+                        {                                                                                 // Add distance to traveled distance if the robot is not on headland navigation
+                            dist_robot_travel = round(100.0 * (dist_robot_travel + dist_travel)) / 100.0; // Round distance to cm.
+                            actual_row = round(100.0 * (actual_row + dist_travel)) / 100.0;               // calculate for this row
+                        }
+                        last_robot_pose = msg->pose[i]; // Write back last robot pose for next iteration
+                    }
+                }
+                else
+                {
+                    // Dave robot start position if this is the first message recieved
+                    last_robot_pose = msg->pose[i];
+                    robot_start_pose = msg->pose[i];
+                }
+
+                // Check if we detected a headland turn.
+                double rel_rotation = getRelRotation(last_robot_pose, robot_start_pose);
+                rel_rotation = sqrt(rel_rotation * rel_rotation); // get abs value
+                std::cout << "robot pose x:" << msg->pose[i].position.x << " y:" << msg->pose[i].position.y << "  rel rot: " << rel_rotation << " [°]" << std::endl;
+
+                if (rel_rotation > 70 && rel_rotation < 160) // check if we are right now on the headland turn:
+                {
+                    std::cout << "on headland" << std::endl;
+                    // Update row counter plus one
+                    headland_navigation = true;
+                    // Take care that the dist. is not counted until the robot has finished the turning.
+                }
+
+                if (rel_rotation >= 160)
+                {
+                    // Move up row counter and reset robot start_pose;
+                    row_counter++;
+                    headland_navigation = false;
+                    robot_start_pose = msg->pose[i]; // override robot start pose with actual pose of robot
+                    actual_row = 0;                  // reset distance in actual row
+                }
+
+                std::cout << "robot distance total: " << dist_robot_travel << " [m]" << std::endl;
+                std::cout << "rows finished: " << row_counter << "  distance in actual row: " << actual_row << " [m]" << std::endl;
+
+                info_msg.rows_finished = row_counter;
+                info_msg.robot_distance_in_row = actual_row;
+                info_msg.robot_distance = dist_robot_travel;
+            }
         }
-        catch (...)
+        std::cout << "Plants destroyed: " << moved_plants << std::endl
+                  << std::endl;
+
+        if (!found_robot)
         {
-            ROS_INFO_STREAM("Couldn't find '" << robot_name << "' in names of topic /gazebo/ModelStates");
+            ROS_WARN_STREAM("Couldn't find '" << robot_name << "' in names of topic /gazebo/ModelStates");
         }
+
+        info_msg.plants_destroyed = moved_plants;
+
+        // Publish path and info
+        info_pub.publish(info_msg);
+        path_pub.publish(path_msg);
 
         // Check if this is the first topic recieved. if yes, save it globaly for future comparison.
         if (!got_first_model_stages)
