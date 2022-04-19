@@ -1,14 +1,20 @@
-# fre_counter
-read in the gazebo model states and count destroyed plants and robot distance traveled
-how to use:
-clone package into your ros workspace and compile:
+# Evaluation nodes
+This repository contains nodes to help with accessing the performance of a robot in Gazebo.
 
-cd ~/catkin_ws/src
+## Destroyed plant counter
+This node reads in the Gazebo model states and count destroyed plants and robot distance traveled.
 
-git clone https://github.com/hohenheimdr/fre_counter.git
+Start node with:
+```commandline
+rosrun evaluation_nodes fre_counter_node
+```
 
-cd  ~/catkin_ws
-catkin_make
+![Screenshot of fre_counter](./misc/fre_counter_example.png)
 
-start node with:
-rosrun fre_counter fre_counter_node
+## Detection spawner
+This node spawns a visual cylinder in Gazebo if a litter of weed is detected by the robot. It expects a topic with the name `fre_detections` of type `std_msgs/String`.
+
+Start node with:
+```commandline
+rosrun evaluation_nodes detection_spawner.py
+```

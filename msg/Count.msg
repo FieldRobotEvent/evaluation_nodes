@@ -1,0 +1,6 @@
+Header header
+
+int64 plants_destroyed
+int64 rows_finished
+float64 robot_distance
+float64 robot_distance_in_row
