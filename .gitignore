@@ -1,0 +1,9 @@
+# Ignore folders
+/.vscode/*
+
+# Ignore file extensions
+*.pyc
+
+# Add specific files
+!.vscode/settings.json
+!.vscode/c_cpp_properties.json

@@ -11,7 +11,7 @@
 
 namespace fre_counter
 {
-    FRE_Counter::FRE_Counter(ros::NodeHandle &n)
+    FRE_Counter::FRE_Counter(ros::NodeHandle *nodehandle) : nh_(*nodehandle)
     {
         got_first_model_stages = false;
         dist_robot_travel = 0;
@@ -24,11 +24,11 @@ namespace fre_counter
         robot_name = getRobotName();
 
         // Create publishers
-        path_pub = n.advertise<nav_msgs::Path>("real_robot_path", 1);
-        info_pub = n.advertise<evaluation_nodes::Count>("info", 1);
+        real_path_publisher_ = nh_.advertise<nav_msgs::Path>("real_robot_path", 1);
+        info_publisher_ = nh_.advertise<evaluation_nodes::Count>("info", 1);
 
         // Create subscribers
-        n.subscribe("/gazebo/model_states", 10, &FRE_Counter::readModelStates, this);
+        model_state_subscriber_ = nh_.subscribe("/gazebo/model_states", 10, &FRE_Counter::readModelStates, this);
     }
 
     FRE_Counter::~FRE_Counter()
@@ -162,8 +162,8 @@ namespace fre_counter
         info_msg.plants_destroyed = moved_plants;
 
         // Publish path and info
-        info_pub.publish(info_msg);
-        path_pub.publish(path_msg);
+        info_publisher_.publish(info_msg);
+        real_path_publisher_.publish(path_msg);
 
         // Check if this is the first topic recieved. if yes, save it globaly for future comparison.
         if (!got_first_model_stages)

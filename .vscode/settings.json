@@ -1,0 +1,12 @@
+{
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/../devel/lib/python3/dist-packages",
+        "${workspaceFolder}/../devel/lib/python3/dist-packages",
+        "/opt/ros/${ROS_DISTRO}/lib/python3/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/../devel/lib/python3/dist-packages",
+        "${workspaceFolder}/../devel/lib/python3/dist-packages",
+        "/opt/ros/${ROS_DISTRO}/lib/python3/dist-packages"
+    ]
+}

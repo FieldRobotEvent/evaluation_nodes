@@ -25,7 +25,7 @@ namespace fre_counter
 	{
 
 	public:
-		FRE_Counter(ros::NodeHandle &n);
+		FRE_Counter(ros::NodeHandle *nodehandle);
 		~FRE_Counter();
 
 		std::string getRobotName();
@@ -33,11 +33,15 @@ namespace fre_counter
 		void readModelStates(const gazebo_msgs::ModelStates::ConstPtr &msg);
 
 	private:
+		ros::NodeHandle nh_;
+
+		ros::Subscriber model_state_subscriber_;
+		ros::Publisher real_path_publisher_, info_publisher_;
+
 		gazebo_msgs::ModelStates start_model_stages;
 		geometry_msgs::Pose last_robot_pose, robot_start_pose;
 		nav_msgs::Path path_msg;
 		evaluation_nodes::Count info_msg;
-		ros::Publisher path_pub, info_pub;
 
 		bool got_first_model_stages, headland_navigation;
 		float dist_robot_travel, actual_row;
