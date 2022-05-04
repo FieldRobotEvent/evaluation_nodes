@@ -42,7 +42,7 @@ class SettingsDialog(QDialog):
         self.max_time_widget.setDisplayFormat("mm : ss")
         self.max_time_widget.setTime(settings["task_time"])
         form.addRow(max_time_label, self.max_time_widget)
-        
+
         layout.addLayout(form)
 
         bbox = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Discard)
@@ -97,9 +97,10 @@ class EvaluationPlugin(Plugin):
                     "Waiting for the robot description in the param server"
                 )
                 rospy.sleep(0.5)
-            rospy.loginfo("Found the robot description in the param server")
 
-            robot_name_widget = QLabel(f"{URDF.from_parameter_server().name}")
+            robot_name = URDF.from_parameter_server().name
+
+            robot_name_widget = QLabel(robot_name)
             robot_name_widget.setFont(QFont("Arial", 25))
             robot_name_widget.setAlignment(Qt.AlignCenter)
             layout.addWidget(robot_name_widget)
