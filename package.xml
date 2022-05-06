@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
-<package format="2">
+<package format="3">
   <name>evaluation_nodes</name>
-  <version>0.0.0</version>
+  <version>0.5.0</version>
   <description>The evaluation_nodes package</description>
 
-  <maintainer email="vpserver@todo.todo">vpserver</maintainer>
+  <maintainer email="info@fieldrobot.com">Field Robot Event Organization</maintainer>
 
   <license>TODO</license>
 
@@ -36,6 +36,7 @@
   <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>urdfdom-py</exec_depend>
+  <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-yaml</exec_depend>
 
   <export>
     <rqt_gui plugin="${prefix}/plugin.xml" />

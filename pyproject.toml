@@ -1,0 +1,7 @@
+[tool.isort]
+profile = "black"
+sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'QT', 'FIRSTPARTY', 'LOCALFOLDER']
+known_qt = ['python_qt_binding']
+
+[tool.black]
+line_length = 88

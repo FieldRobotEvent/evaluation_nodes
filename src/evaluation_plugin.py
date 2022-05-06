@@ -2,62 +2,29 @@ from __future__ import annotations
 
 from argparse import ArgumentParser
 from datetime import time
-from typing import TYPE_CHECKING
 
 import rospy
-from python_qt_binding.QtCore import Qt, QTime
-from python_qt_binding.QtGui import QFont
+from qt_gui.plugin import Plugin
+from qt_gui.plugin_context import PluginContext
+from qt_gui.settings import Settings
+from rospkg import RosPack
+from urdf_parser_py.urdf import URDF
+
+from python_qt_binding.QtCore import Qt
 from python_qt_binding.QtWidgets import (
-    QDialog,
-    QDialogButtonBox,
     QFormLayout,
     QLabel,
-    QTimeEdit,
+    QLCDNumber,
     QVBoxLayout,
     QWidget,
 )
-from qt_gui.plugin import Plugin
-from urdf_parser_py.urdf import URDF
 
 from evaluation_nodes.msg import Count
+from evaluation_plugin_widgets.robot_name import RobotNameWidget
+from evaluation_plugin_widgets.rviz import RVIZWidget
+from evaluation_plugin_widgets.settings import SettingsDialog
 
-if TYPE_CHECKING:
-    from typing import Any
-
-    from qt_gui.plugin_context import PluginContext
-    from qt_gui.settings import Settings
-
-
-class SettingsDialog(QDialog):
-    def __init__(self, settings: dict[str, Any]):
-        super().__init__()
-
-        self.setWindowTitle("Field Robot Event Evaluation - settings")
-
-        layout = QVBoxLayout()
-        form = QFormLayout()
-
-        max_time_label = QLabel("Task time (mm:ss):")
-        self.max_time_widget = QTimeEdit()
-        self.max_time_widget.setDisplayFormat("mm : ss")
-        self.max_time_widget.setTime(settings["task_time"])
-        form.addRow(max_time_label, self.max_time_widget)
-
-        layout.addLayout(form)
-
-        bbox = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Discard)
-        bbox.button(QDialogButtonBox.Save).clicked.connect(self.save)
-        bbox.button(QDialogButtonBox.Discard).clicked.connect(self.discard)
-        layout.addWidget(bbox)
-
-        self.setLayout(layout)
-
-    def save(self) -> None:
-        rospy.loginfo(f"Changing task time to {self.max_time_widget.time().toPyTime()}")
-        return super().accept()
-
-    def discard(self) -> None:
-        return super().reject()
+_rospack = RosPack()
 
 
 class EvaluationPlugin(Plugin):
@@ -66,6 +33,12 @@ class EvaluationPlugin(Plugin):
         "--verbose",
         action="store_true",
         help="Use plugin in verbose mode.",
+    )
+    parser.add_argument(
+        "--rviz_config",
+        type=str,
+        help="Path to the RVIZ configuration file",
+        default=_rospack.get_path("evaluation_nodes") + "/config/config.rviz",
     )
     parser.add_argument(
         "--no_lookup_robot_name",
@@ -81,8 +54,8 @@ class EvaluationPlugin(Plugin):
         # Parse optional arguments
         args, unknowns = EvaluationPlugin.parser.parse_known_args(context.argv())
         if args.verbose:
-            print(f"Arguments: {args}")
-            print(f"Unknown arguments: {unknowns}")
+            rospy.loginfo(f"Arguments: {args}")
+            rospy.loginfo(f"Unknown arguments: {unknowns}")
 
         self._widget = QWidget()
         self._widget.setObjectName("EvaluationPluginUI")
@@ -90,20 +63,31 @@ class EvaluationPlugin(Plugin):
 
         layout = QVBoxLayout(self._widget)
 
-        # Get robot name
+        # Add robot name widget
         if not args.no_lookup_robot_name:
-            while not rospy.has_param("robot_description") and not rospy.is_shutdown():
-                rospy.loginfo_once(
-                    "Waiting for the robot description in the param server"
-                )
-                rospy.sleep(0.5)
-
-            robot_name = URDF.from_parameter_server().name
-
-            robot_name_widget = QLabel(robot_name)
-            robot_name_widget.setFont(QFont("Arial", 25))
-            robot_name_widget.setAlignment(Qt.AlignCenter)
+            robot_name_widget = RobotNameWidget()
             layout.addWidget(robot_name_widget)
+
+        f_layout = QFormLayout()
+        # f_layout.setFormAlignment(Qt.AlignLeft)
+
+        lcd = QLCDNumber()
+        lcd.setDigitCount(5)
+        lcd.setMinimumHeight(50)
+        lcd.setStyleSheet("border: 0px;")
+        lcd.setSegmentStyle(QLCDNumber.Filled)
+        lcd.display("05:00")
+
+        lcd_label = QLabel("Remaining time: ")
+        lcd_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        f_layout.addRow(lcd_label, lcd)
+
+        layout.addLayout(f_layout)
+
+        # Add RVIZ
+        rviz = RVIZWidget(args.rviz_config)
+        layout.addWidget(rviz)
 
         if context.serial_number() > 1:
             self._widget.setWindowTitle(
