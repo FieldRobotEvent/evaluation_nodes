@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser
-from datetime import time
-
+from json import loads as convert_to_python
+from pathlib import Path
+from io import BytesIO
 import rospy
 from qt_gui.plugin import Plugin
 from qt_gui.plugin_context import PluginContext
 from qt_gui.settings import Settings
 from rospkg import RosPack
-from urdf_parser_py.urdf import URDF
+from std_srvs.srv import Empty
 
-from python_qt_binding.QtCore import Qt
+from python_qt_binding.QtCore import Qt, QTimer
 from python_qt_binding.QtWidgets import (
-    QFormLayout,
+    QFileDialog,
+    QGridLayout,
     QLabel,
     QLCDNumber,
+    QMessageBox,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -23,6 +27,8 @@ from evaluation_nodes.msg import Count
 from evaluation_plugin_widgets.robot_name import RobotNameWidget
 from evaluation_plugin_widgets.rviz import RVIZWidget
 from evaluation_plugin_widgets.settings import SettingsDialog
+from compare_maps import FieldDescription
+from evaluation_plugin_widgets.image import ImageDialog
 
 _rospack = RosPack()
 
@@ -52,42 +58,27 @@ class EvaluationPlugin(Plugin):
         self.settings = {}
 
         # Parse optional arguments
-        args, unknowns = EvaluationPlugin.parser.parse_known_args(context.argv())
-        if args.verbose:
-            rospy.loginfo(f"Arguments: {args}")
+        self.args, unknowns = EvaluationPlugin.parser.parse_known_args(context.argv())
+        if self.args.verbose:
+            rospy.loginfo(f"Arguments: {self.args}")
             rospy.loginfo(f"Unknown arguments: {unknowns}")
 
-        self._widget = QWidget()
-        self._widget.setObjectName("EvaluationPluginUI")
-        self._widget.setWindowTitle("Field Robot Event Evaluation")
+        self._pause_client = rospy.ServiceProxy("/gazebo/pause_physics", Empty)
+        self._play_client = rospy.ServiceProxy("/gazebo/unpause_physics", Empty)
 
-        layout = QVBoxLayout(self._widget)
+        try:
+            self._pause_client.wait_for_service(timeout=2)
+            self._play_client.wait_for_service(timeout=2)
+        except rospy.ROSException:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Could not connect to Gazebo")
+            msg.setInformativeText("Did you launched the Gazebo environment?")
+            msg.setWindowTitle("Error")
+            msg.exec_()
+            exit(1)
 
-        # Add robot name widget
-        if not args.no_lookup_robot_name:
-            robot_name_widget = RobotNameWidget()
-            layout.addWidget(robot_name_widget)
-
-        f_layout = QFormLayout()
-        # f_layout.setFormAlignment(Qt.AlignLeft)
-
-        lcd = QLCDNumber()
-        lcd.setDigitCount(5)
-        lcd.setMinimumHeight(50)
-        lcd.setStyleSheet("border: 0px;")
-        lcd.setSegmentStyle(QLCDNumber.Filled)
-        lcd.display("05:00")
-
-        lcd_label = QLabel("Remaining time: ")
-        lcd_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-        f_layout.addRow(lcd_label, lcd)
-
-        layout.addLayout(f_layout)
-
-        # Add RVIZ
-        rviz = RVIZWidget(args.rviz_config)
-        layout.addWidget(rviz)
+        self._widget = self.setup_ui()
 
         if context.serial_number() > 1:
             self._widget.setWindowTitle(
@@ -95,33 +86,213 @@ class EvaluationPlugin(Plugin):
             )
         context.add_widget(self._widget)
 
-        # Register subscribers
         self._count_subscriber = rospy.Subscriber(
             "fre_counter/info", Count, self._count_callback
         )
 
+        self._update_clock_timer = QTimer(self)
+        self._update_clock_timer.setInterval(100)
+        self._update_clock_timer.timeout.connect(self._clock_callback)
+        self._update_clock_timer.start()
+
+        self.start_time = rospy.Time.now()
+
+    def setup_ui(self) -> QWidget:
+        widget = QWidget()
+        widget.setObjectName("EvaluationPluginUI")
+        widget.setWindowTitle("Field Robot Event Evaluation")
+
+        layout = QVBoxLayout(widget)
+
+        # Add robot name widget
+        if not self.args.no_lookup_robot_name:
+            robot_name_widget = RobotNameWidget()
+            layout.addWidget(robot_name_widget)
+
+        grid = QGridLayout()
+
+        # Add remaining time
+        remaining_time_label = QLabel("Remaining time [mm:ss]: ")
+        remaining_time_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        grid.addWidget(remaining_time_label, 0, 0)
+        self.remaining_time_widget = QLCDNumber()
+        self.remaining_time_widget.setDigitCount(5)
+        self.remaining_time_widget.setMinimumHeight(50)
+        self.remaining_time_widget.setStyleSheet("border: 0px;")
+        self.remaining_time_widget.setSegmentStyle(QLCDNumber.Filled)
+        self.remaining_time_widget.display("00:00")
+        grid.addWidget(self.remaining_time_widget, 0, 1)
+
+        # Add number of hitted plants
+        hit_plants_label = QLabel("Destroyed plants: ")
+        hit_plants_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        grid.addWidget(hit_plants_label, 1, 0)
+        self._hit_plant_widget = QLCDNumber()
+        self._hit_plant_widget.setDigitCount(5)
+        self._hit_plant_widget.setMinimumHeight(50)
+        self._hit_plant_widget.setStyleSheet("border: 0px;")
+        self._hit_plant_widget.setSegmentStyle(QLCDNumber.Filled)
+        self._hit_plant_widget.display("000.0")
+        grid.addWidget(self._hit_plant_widget, 1, 1)
+
+        # Add driven distance
+        distance_label = QLabel("Travelled distance [m]: ")
+        distance_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        grid.addWidget(distance_label, 0, 2)
+        self._distance_widget = QLCDNumber()
+        self._distance_widget.setDigitCount(5)
+        self._distance_widget.setMinimumHeight(50)
+        self._distance_widget.setStyleSheet("border: 0px;")
+        self._distance_widget.setSegmentStyle(QLCDNumber.Filled)
+        self._distance_widget.display("000.0")
+        grid.addWidget(self._distance_widget, 0, 3)
+
+        # Add driven distance in row
+        distance_in_row_label = QLabel("Travelled distance in row [m]: ")
+        distance_in_row_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        grid.addWidget(distance_in_row_label, 1, 2)
+        self._distance_in_row_widget = QLCDNumber()
+        self._distance_in_row_widget.setDigitCount(5)
+        self._distance_in_row_widget.setMinimumHeight(50)
+        self._distance_in_row_widget.setStyleSheet("border: 0px;")
+        self._distance_in_row_widget.setSegmentStyle(QLCDNumber.Filled)
+        self._distance_in_row_widget.display("000.0")
+        grid.addWidget(self._distance_in_row_widget, 1, 3)
+
+        # Pause and play button
+        play_button = QPushButton("Play")
+        play_button.clicked.connect(self._play)
+        grid.addWidget(play_button, 0, 4)
+        pause_button = QPushButton("Pause")
+        pause_button.clicked.connect(self._pause)
+        grid.addWidget(pause_button, 1, 4)
+
+        self._compare_maps_button = QPushButton("Show maps")
+        self._compare_maps_button.clicked.connect(self._compare_maps)
+        grid.addWidget(self._compare_maps_button, 2, 4)
+
+        layout.addLayout(grid)
+
+        # Add RVIZ
+        rviz = RVIZWidget(self.args.rviz_config)
+        layout.addWidget(rviz)
+
+        return widget
+
     def _count_callback(self, msg: Count) -> None:
-        pass
+        self._hit_plant_widget.display(f"{msg.plants_destroyed:05}")
+        self._distance_widget.display(f"{msg.robot_distance:05.1f}")
+        self._distance_in_row_widget.display(f"{msg.robot_distance_in_row:05.1f}")
+
+    def _clock_callback(self) -> None:
+        elapsed_seconds = (rospy.Time.now() - self.start_time).to_sec()
+        remaining_time = int(
+            round(self.settings["task_time_seconds"] - elapsed_seconds)
+        )
+        self.remaining_time_widget.display(
+            f"{remaining_time//60:02}:{remaining_time%60:02}"
+        )
+
+        if self.settings["stop_simulation_automatically"] and remaining_time <= 0:
+            rospy.loginfo("Stopped simulation because time limit is reached!")
+            self._pause()
+            self._update_clock_timer.stop()
+
+    def _play(self) -> None:
+        self._play_client.call()
+
+    def _pause(self) -> None:
+        self._pause_client.call()
+
+    def _compare_maps(self) -> None:
+        gt_map_file = (
+            Path(_rospack.get_path("virtual_maize_field")) / "map/map.csv"
+        )
+        pred_map_file = (
+            Path(_rospack.get_path("virtual_maize_field")) / "map/pred_map.csv"
+        )
+
+        if not pred_map_file.is_file():
+            pred_map_file = Path(
+                QFileDialog.getOpenFileName(
+                    self._widget,
+                    "Open file",
+                    str(pred_map_file.parent),
+                    "Map files (*.csv)",
+                )[0]
+            )
+
+        gt = FieldDescription.from_csv(gt_map_file)
+        pred = FieldDescription.from_csv(pred_map_file)
+
+        weed_score, weed_matches = pred.compute_score_with(gt, "weed")
+        litter_score, litter_matches = pred.compute_score_with(gt, "litter")
+
+        fig = pred.plot_matches_with(
+            gt, "pred", "gt", weed_matches, litter_matches, weed_score, litter_score
+        )
+        img_buffer = BytesIO()
+        fig.savefig(img_buffer, dpi=500)
+        img_buffer.seek(0)
+
+        dlg = ImageDialog(img_buffer)
+
+        dlg.show()
+        
+
+
+    
+        
+
+    def _hide_unhide_maps_button(self) -> None:
+        self._compare_maps_button.setVisible(self.settings["show_compare_maps_button"])
 
     def shutdown_plugin(self) -> None:
         self._count_subscriber.unregister()
+        self._update_clock_timer.stop()
+        self._play_client.close()
+        self._pause_client.close()
 
     def save_settings(
         self, plugin_settings: Settings, instance_settings: Settings
     ) -> None:
-        plugin_settings.set_value("task_time", self.settings["task_time"])
+        for setting_name in (
+            "task_time_seconds",
+            "stop_simulation_automatically",
+            "show_compare_maps_button",
+        ):
+            plugin_settings.set_value(setting_name, self.settings[setting_name])
 
     def restore_settings(
         self, plugin_settings: Settings, instance_settings: Settings
     ) -> None:
-        # TODO restore intrinsic configuration, usually using:
-        # v = instance_settings.value(k)
-        self.settings["task_time"] = plugin_settings.value(
-            "task_time", time(minute=3, second=0)
-        )
+        for setting_name, default_value in zip(
+            (
+                "task_time_seconds",
+                "stop_simulation_automatically",
+                "show_compare_maps_button",
+            ),
+            (180, "true", "true"),
+        ):
+            self.settings[setting_name] = convert_to_python(
+                plugin_settings.value(setting_name, default_value)
+            )
+
+        self._hide_unhide_maps_button()
 
     def trigger_configuration(self) -> None:
         dlg = SettingsDialog(self.settings)
         if dlg.exec():
             rospy.loginfo("Apply and save settings.")
-            self.settings["task_time"] = dlg.max_time_widget.time().toPyTime()
+            t = dlg.max_time_widget.time().toPyTime()
+            self.settings["task_time_seconds"] = (
+                t.hour * 60 + t.minute
+            ) * 60 + t.second
+            self.settings[
+                "stop_simulation_automatically"
+            ] = dlg.stop_automatically_checkbox.isChecked()
+            self.settings[
+                "show_compare_maps_button"
+            ] = dlg.show_compare_maps_button.isChecked()
+
+        self._hide_unhide_maps_button()
