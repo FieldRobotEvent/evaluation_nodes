@@ -43,7 +43,7 @@ add_library(fre_counter
   src/fre_counter.cpp
 )
 
-add_dependencies(fre_counter ${catkin_EXPORTED_TARGETS})
+add_dependencies(fre_counter ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 target_link_libraries(fre_counter
    ${catkin_LIBRARIES}
