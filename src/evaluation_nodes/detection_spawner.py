@@ -86,12 +86,8 @@ if __name__ == "__main__":
 
     rospy.loginfo("gazebo services started")
 
-    has_printed = False
     while not rospy.has_param("robot_description") and not rospy.is_shutdown():
-        if not has_printed:
-            print("Waiting for the robot description in the param server")
-            has_printed = True
-
+        rospy.loginfo_once("Waiting for the robot description in the param server")
         rospy.sleep(0.5)
 
     rospy.loginfo("Found the robot description in the param server")

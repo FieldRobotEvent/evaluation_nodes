@@ -1,0 +1,10 @@
+<library path="src/evaluation_nodes">
+    <class name="Evaluation" type="evaluation_plugin.EvaluationPlugin" base_class_type="rqt_gui_py::Plugin">
+        <description>Evaluation tool for the Field Robot Event.</description>
+        <qtgui>
+            <label>Field Robot Event Evaluation</label>
+            <icon type="file">misc/fre_icon.png</icon>
+            <statustip>Evaluation tool for the Field Robot Event.</statustip>
+        </qtgui>
+    </class>
+</library>
