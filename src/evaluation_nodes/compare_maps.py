@@ -11,12 +11,12 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial import distance_matrix
 
 
-class FieldDescription:
+class FieldMap:
     def __init__(self, objects: dict[str, np.ndarray]):
         self.objects = objects
 
     def compute_score_with(
-        self, other: FieldDescription, object_key: str
+        self, other: FieldMap, object_key: str
     ) -> tuple[float, tuple[np.ndarray, np.ndarray]]:
         """
         Calculate the score according to the rules at:
@@ -49,16 +49,17 @@ class FieldDescription:
 
     def plot_matches_with(
         self,
-        other: FieldDescription,
+        other: FieldMap,
         this_name: str,
         other_name: str,
         weed_matches: tuple[np.ndarray, np.ndarray],
         litter_matches: tuple[np.ndarray, np.ndarray],
         weed_score: float,
         litter_score: float,
+        figsize: tuple[int, int] = (10, 10),
     ) -> plt.figure:
         plt.plot()
-        plt.figure(figsize=(10, 10))
+        plt.figure(figsize=figsize)
         plt.gca().axis("equal")
         labels = []
 
@@ -68,7 +69,7 @@ class FieldDescription:
         else:
             crop = other.objects["crop"]
 
-        _image = plt.imread(Path(__file__).parent / "../misc/maize.png")
+        _image = plt.imread(Path(__file__).parent / "maize.png")
         self.image_scatter(crop[:, 0], crop[:, 1], _image)
 
         def _add_objects(objects: np.ndarray, legend: str, **kwargs) -> None:
@@ -210,7 +211,7 @@ class FieldDescription:
             ax.add_artist(ab)
 
     @classmethod
-    def from_csv(cls, csv_path: Path) -> FieldDescription:
+    def from_csv(cls, csv_path: Path) -> FieldMap:
         with csv_path.open("r") as fs:
             reader = csv_reader(fs)
 
@@ -233,7 +234,7 @@ class FieldDescription:
                 print(f"Something is wrong with {csv_path}")
                 print("Probably there is an empty line in your file")
 
-        return FieldDescription(objects)
+        return FieldMap(objects)
 
 
 if __name__ == "__main__":
@@ -269,8 +270,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    gt = FieldDescription.from_csv(args.gt_path)
-    pred = FieldDescription.from_csv(args.pred_path)
+    gt = FieldMap.from_csv(args.gt_path)
+    pred = FieldMap.from_csv(args.pred_path)
 
     weed_score, weed_matches = pred.compute_score_with(gt, "weed")
     litter_score, litter_matches = pred.compute_score_with(gt, "litter")

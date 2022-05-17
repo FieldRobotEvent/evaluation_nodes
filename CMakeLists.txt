@@ -15,6 +15,9 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+# Generate the python library
+catkin_python_setup()
+
 add_message_files(
   FILES
   Count.msg

@@ -11,12 +11,13 @@ from python_qt_binding.QtWidgets import (
     QLabel,
     QTimeEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, settings: dict[str, Any]):
-        super().__init__()
+    def __init__(self, parent: QWidget, settings: dict[str, Any]):
+        super().__init__(parent)
 
         self.setWindowTitle("Field Robot Event Evaluation - settings")
 

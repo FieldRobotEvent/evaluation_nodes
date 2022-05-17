@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from argparse import ArgumentParser
 from json import loads as convert_to_python
-from pathlib import Path
-from io import BytesIO
+
 import rospy
 from qt_gui.plugin import Plugin
 from qt_gui.plugin_context import PluginContext
@@ -13,7 +12,6 @@ from std_srvs.srv import Empty
 
 from python_qt_binding.QtCore import Qt, QTimer
 from python_qt_binding.QtWidgets import (
-    QFileDialog,
     QGridLayout,
     QLabel,
     QLCDNumber,
@@ -23,12 +21,11 @@ from python_qt_binding.QtWidgets import (
     QWidget,
 )
 
+from evaluation_nodes.evaluation_plugin_widgets.maps import ShowMapDialog
+from evaluation_nodes.evaluation_plugin_widgets.robot_name import RobotNameWidget
+from evaluation_nodes.evaluation_plugin_widgets.rviz import RVIZWidget
+from evaluation_nodes.evaluation_plugin_widgets.settings import SettingsDialog
 from evaluation_nodes.msg import Count
-from evaluation_plugin_widgets.robot_name import RobotNameWidget
-from evaluation_plugin_widgets.rviz import RVIZWidget
-from evaluation_plugin_widgets.settings import SettingsDialog
-from compare_maps import FieldDescription
-from evaluation_plugin_widgets.image import ImageDialog
 
 _rospack = RosPack()
 
@@ -56,6 +53,8 @@ class EvaluationPlugin(Plugin):
         super().__init__(context)
         self.setObjectName("EvaluationPlugin")
         self.settings = {}
+        self.last_time = rospy.Time.now()
+        self.paused = True
 
         # Parse optional arguments
         self.args, unknowns = EvaluationPlugin.parser.parse_known_args(context.argv())
@@ -160,16 +159,13 @@ class EvaluationPlugin(Plugin):
         grid.addWidget(self._distance_in_row_widget, 1, 3)
 
         # Pause and play button
-        play_button = QPushButton("Play")
-        play_button.clicked.connect(self._play)
-        grid.addWidget(play_button, 0, 4)
-        pause_button = QPushButton("Pause")
-        pause_button.clicked.connect(self._pause)
-        grid.addWidget(pause_button, 1, 4)
+        self.play_pause_button = QPushButton("Play")
+        self.play_pause_button.clicked.connect(self._toggle_play_pause)
+        grid.addWidget(self.play_pause_button, 0, 4)
 
         self._compare_maps_button = QPushButton("Show maps")
         self._compare_maps_button.clicked.connect(self._compare_maps)
-        grid.addWidget(self._compare_maps_button, 2, 4)
+        grid.addWidget(self._compare_maps_button, 1, 4)
 
         layout.addLayout(grid)
 
@@ -185,64 +181,46 @@ class EvaluationPlugin(Plugin):
         self._distance_in_row_widget.display(f"{msg.robot_distance_in_row:05.1f}")
 
     def _clock_callback(self) -> None:
-        elapsed_seconds = (rospy.Time.now() - self.start_time).to_sec()
-        remaining_time = int(
-            round(self.settings["task_time_seconds"] - elapsed_seconds)
-        )
-        self.remaining_time_widget.display(
-            f"{remaining_time//60:02}:{remaining_time%60:02}"
-        )
+        now = rospy.Time.now()
 
-        if self.settings["stop_simulation_automatically"] and remaining_time <= 0:
-            rospy.loginfo("Stopped simulation because time limit is reached!")
-            self._pause()
-            self._update_clock_timer.stop()
+        if self.last_time == now and not self.paused:
+            self.paused = True
+            self.play_pause_button.setText("Play")
 
-    def _play(self) -> None:
-        self._play_client.call()
+            rospy.loginfo("Pause simulation")
 
-    def _pause(self) -> None:
-        self._pause_client.call()
+        elif self.last_time != now and self.paused:
+            self.paused = False
+            self.play_pause_button.setText("Pause")
 
-    def _compare_maps(self) -> None:
-        gt_map_file = (
-            Path(_rospack.get_path("virtual_maize_field")) / "map/map.csv"
-        )
-        pred_map_file = (
-            Path(_rospack.get_path("virtual_maize_field")) / "map/pred_map.csv"
-        )
+            rospy.loginfo("Unpause simulation")
 
-        if not pred_map_file.is_file():
-            pred_map_file = Path(
-                QFileDialog.getOpenFileName(
-                    self._widget,
-                    "Open file",
-                    str(pred_map_file.parent),
-                    "Map files (*.csv)",
-                )[0]
+        if not self.paused:
+            self.last_time = now
+
+            elapsed_seconds = (rospy.Time.now() - self.start_time).to_sec()
+            remaining_time = int(
+                round(self.settings["task_time_seconds"] - elapsed_seconds)
+            )
+            self.remaining_time_widget.display(
+                f"{remaining_time//60:02}:{remaining_time%60:02}"
             )
 
-        gt = FieldDescription.from_csv(gt_map_file)
-        pred = FieldDescription.from_csv(pred_map_file)
+            if self.settings["stop_simulation_automatically"] and remaining_time <= 0:
+                rospy.loginfo("Stopped simulation because time limit is reached!")
+                self._pause()
+                self._update_clock_timer.stop()
 
-        weed_score, weed_matches = pred.compute_score_with(gt, "weed")
-        litter_score, litter_matches = pred.compute_score_with(gt, "litter")
+    def _toggle_play_pause(self) -> None:
+        if self.paused:
+            self._play_client.call()
+        else:
+            self._pause_client.call()
 
-        fig = pred.plot_matches_with(
-            gt, "pred", "gt", weed_matches, litter_matches, weed_score, litter_score
-        )
-        img_buffer = BytesIO()
-        fig.savefig(img_buffer, dpi=500)
-        img_buffer.seek(0)
-
-        dlg = ImageDialog(img_buffer)
-
-        dlg.show()
-        
-
-
-    
-        
+    def _compare_maps(self) -> None:
+        rospy.loginfo("Opening compare maps dialog.")
+        dlg = ShowMapDialog(self._widget)
+        dlg.showMaximized()
 
     def _hide_unhide_maps_button(self) -> None:
         self._compare_maps_button.setVisible(self.settings["show_compare_maps_button"])
@@ -281,7 +259,7 @@ class EvaluationPlugin(Plugin):
         self._hide_unhide_maps_button()
 
     def trigger_configuration(self) -> None:
-        dlg = SettingsDialog(self.settings)
+        dlg = SettingsDialog(self._widget, self.settings)
         if dlg.exec():
             rospy.loginfo("Apply and save settings.")
             t = dlg.max_time_widget.time().toPyTime()
