@@ -1,3 +1,0 @@
-<launch>
-    <node pkg="rqt_gui" type="rqt_gui" name="dashboard" args="--standalone evaluation_nodes/Evaluation --args --rviz_config '$(find evaluation_nodes)/config/config.rviz'" output="screen" />
-</launch>
