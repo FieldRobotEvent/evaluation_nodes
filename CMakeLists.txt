@@ -18,6 +18,10 @@ find_package(catkin REQUIRED COMPONENTS
 # Generate the python library
 catkin_python_setup()
 
+################################################
+## Declare ROS messages, services and actions ##
+################################################
+
 add_message_files(
   FILES
   Count.msg
@@ -28,11 +32,19 @@ generate_messages(
    std_msgs
 )
 
+###################################
+## catkin specific configuration ##
+###################################
+
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES fre_counter
   CATKIN_DEPENDS roscpp urdf gazebo_msgs geometry_msgs std_msgs nav_msgs geometry_msgs message_runtime
 )
+
+###########
+## Build ##
+###########
 
 include_directories(
   include
@@ -50,6 +62,10 @@ target_link_libraries(fre_counter
 )
 
 add_executable(fre_counter_node src/fre_counter_node.cpp)
+
+#############
+## Install ##
+#############
 
 target_link_libraries(fre_counter_node
    ${catkin_LIBRARIES}
