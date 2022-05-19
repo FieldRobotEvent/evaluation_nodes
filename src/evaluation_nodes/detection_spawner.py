@@ -87,11 +87,11 @@ if __name__ == "__main__":
     rospy.loginfo("gazebo services started")
 
     while not rospy.has_param("robot_description") and not rospy.is_shutdown():
-        rospy.loginfo_once("Waiting for the robot description in the param server")
+        rospy.loginfo_once("Waiting for the robot_description in the param server")
         rospy.sleep(0.5)
 
-    rospy.loginfo("Found the robot description in the param server")
     robot_name = URDF.from_parameter_server().name
+    rospy.loginfo(f"Found robot name '{robot_name}' from robot_description")
 
     rospy.Subscriber("fre_detections", String, callback)
     rospy.spin()

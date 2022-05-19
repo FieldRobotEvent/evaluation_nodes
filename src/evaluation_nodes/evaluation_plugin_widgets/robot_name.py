@@ -10,9 +10,10 @@ from python_qt_binding.QtWidgets import QLabel
 
 class RobotNameWidget(QLabel):
     def __init__(self) -> None:
+        rate = rospy.Rate(10)
         while not rospy.has_param("robot_description") and not rospy.is_shutdown():
-            rospy.loginfo_once("Waiting for the robot description in the param server")
-            rospy.sleep(0.5)
+            rospy.loginfo_throttle(5, "Waiting for the robot description in the param server")
+            rate.sleep()
 
         robot_name = URDF.from_parameter_server().name
 

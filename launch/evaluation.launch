@@ -2,7 +2,7 @@
     <arg name="task" default="navigation" />
 
     <!-- Launch the counter node -->
-    <node pkg="evaluation_nodes" type="fre_counter_node" name="fre_counter" /> 
+    <node pkg="evaluation_nodes" type="fre_counter_node" name="fre_counter" />
 
     <!-- Launch the detection spawner -->
     <node pkg="evaluation_nodes" type="detection_spawner.py" name="detection_spawner" if="$(eval arg('task') == 'mapping')" />

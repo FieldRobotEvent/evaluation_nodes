@@ -66,8 +66,8 @@ class EvaluationPlugin(Plugin):
         self._play_client = rospy.ServiceProxy("/gazebo/unpause_physics", Empty)
 
         try:
-            self._pause_client.wait_for_service(timeout=2)
-            self._play_client.wait_for_service(timeout=2)
+            self._pause_client.wait_for_service(timeout=10)
+            self._play_client.wait_for_service(timeout=10)
         except rospy.ROSException:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)

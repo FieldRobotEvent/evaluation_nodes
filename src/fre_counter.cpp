@@ -156,7 +156,7 @@ namespace fre_counter
 
         if (!found_robot)
         {
-            ROS_WARN_STREAM("Couldn't find '" << robot_name << "' in names of topic /gazebo/ModelStates");
+            ROS_WARN_STREAM_THROTTLE(5, "Couldn't find '" << robot_name << "' in names of topic /gazebo/ModelStates");
         }
 
         info_msg.plants_destroyed = moved_plants;
@@ -175,8 +175,20 @@ namespace fre_counter
 
     std::string FRE_Counter::getRobotName()
     {
+        ros::Rate rate(10);
+
+        while (!nh_.hasParam("robot_description") && ros::ok())
+        {
+            ROS_INFO_THROTTLE(5, "Waiting for parameter robot_description");
+            rate.sleep();
+        }
+
         urdf::Model model;
         model.initParam("robot_description");
-        return static_cast<std::string>(model.getName());
+        std::string robot_name = static_cast<std::string>(model.getName());
+
+        ROS_INFO_STREAM("Found robot name '" << robot_name << "' from robot_description");
+
+        return robot_name;
     }
 }
