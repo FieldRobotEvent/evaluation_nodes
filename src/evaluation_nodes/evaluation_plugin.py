@@ -41,7 +41,7 @@ class EvaluationPlugin(Plugin):
         "--rviz_config",
         type=str,
         help="Path to the RVIZ configuration file",
-        default=_rospack.get_path("evaluation_nodes") + "/config/config.rviz",
+        default=_rospack.get_path("virtual_maize_field") + "/rviz/config.rviz",
     )
     parser.add_argument(
         "--no_lookup_robot_name",
