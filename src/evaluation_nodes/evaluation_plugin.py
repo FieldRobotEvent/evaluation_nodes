@@ -250,7 +250,7 @@ class EvaluationPlugin(Plugin):
                 "stop_simulation_automatically",
                 "show_compare_maps_button",
             ),
-            (180, "true", "true"),
+            ("180", "true", "true"),
         ):
             self.settings[setting_name] = convert_to_python(
                 plugin_settings.value(setting_name, default_value)
