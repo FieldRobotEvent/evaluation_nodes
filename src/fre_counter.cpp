@@ -177,17 +177,17 @@ namespace fre_counter
     {
         ros::Rate rate(10);
 
-        while (!nh_.hasParam("robot_description") && ros::ok())
+        while (!nh_.hasParam("/robot_description") && ros::ok())
         {
-            ROS_INFO_THROTTLE(5, "Waiting for parameter robot_description");
+            ROS_INFO_THROTTLE(5, "Waiting for parameter /robot_description");
             rate.sleep();
         }
 
         urdf::Model model;
-        model.initParam("robot_description");
+        model.initParam("/robot_description");
         std::string robot_name = static_cast<std::string>(model.getName());
 
-        ROS_INFO_STREAM("Found robot name '" << robot_name << "' from robot_description");
+        ROS_INFO_STREAM("Found robot name '" << robot_name << "' from /robot_description");
 
         return robot_name;
     }
