@@ -69,7 +69,7 @@ class FieldMap:
         else:
             crop = other.objects["crop"]
 
-        _image = plt.imread(Path(__file__).parent / "maize.png")
+        _image = plt.imread(str(Path(__file__).parent / "maize.png"))
         self.image_scatter(crop[:, 0], crop[:, 1], _image)
 
         def _add_objects(objects: np.ndarray, legend: str, **kwargs) -> None:
