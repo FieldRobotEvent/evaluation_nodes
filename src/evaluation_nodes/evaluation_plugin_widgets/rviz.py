@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from io import StringIO
-from numpy import disp
 
+from numpy import disp
 from rospkg import RosPack
 from rviz import bindings as rviz
 from yaml import safe_dump, safe_load
@@ -70,7 +70,7 @@ class RVIZWidget(QWidget):
                 ):
                     _tools_list.append(tool)
             content["Visualization Manager"]["Tools"] = _tools_list
-            
+
             # Make grid larger and fixed to the odom frame
             _display_list = []
             for display in content["Visualization Manager"]["Displays"]:
@@ -82,7 +82,9 @@ class RVIZWidget(QWidget):
             content["Visualization Manager"]["Displays"] = _display_list
 
             # Make camera move with base_link
-            content["Visualization Manager"]["Global Options"]["Fixed Frame"] = base_link_name
+            content["Visualization Manager"]["Global Options"][
+                "Fixed Frame"
+            ] = base_link_name
 
             safe_dump(content, output_stream)
 
