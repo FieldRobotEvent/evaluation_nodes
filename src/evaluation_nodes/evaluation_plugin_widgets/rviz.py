@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import StringIO
+from numpy import disp
 
 from rospkg import RosPack
 from rviz import bindings as rviz
@@ -44,16 +45,22 @@ class RVIZWidget(QWidget):
         self.setLayout(layout)
 
     @staticmethod
-    def init_rviz_config(config_file: str) -> str:
+    def init_rviz_config(config_file: str, base_link_name: str = "base_link") -> str:
         output_stream = StringIO()
 
         with open(config_file, "r") as content_stream:
             content = safe_load(content_stream)
 
+            # Clear panels on side
             content["Panels"].clear()
+
+            # Disable save on exit
             content["Preferences"]["PromptSaveOnExit"] = False
+
+            # Remove tool buttons
             content["Toolbars"]["toolButtonStyle"] = 0
 
+            # Remove all tools except the interaction, move and focus tool
             _tools_list = []
             for tool in content["Visualization Manager"]["Tools"]:
                 if tool["Class"] in (
@@ -63,6 +70,19 @@ class RVIZWidget(QWidget):
                 ):
                     _tools_list.append(tool)
             content["Visualization Manager"]["Tools"] = _tools_list
+            
+            # Make grid larger and fixed to the odom frame
+            _display_list = []
+            for display in content["Visualization Manager"]["Displays"]:
+                if display["Name"] == "Grid":
+                    display["Plane Cell Count"] = 1000
+                    display["Reference Frame"] = "odom"
+
+                _display_list.append(display)
+            content["Visualization Manager"]["Displays"] = _display_list
+
+            # Make camera move with base_link
+            content["Visualization Manager"]["Global Options"]["Fixed Frame"] = base_link_name
 
             safe_dump(content, output_stream)
 
