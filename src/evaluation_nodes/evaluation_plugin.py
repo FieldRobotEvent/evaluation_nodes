@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from argparse import ArgumentParser
 from json import loads as convert_to_python
+from secrets import choice
 
 import rospy
 from qt_gui.plugin import Plugin
@@ -42,6 +43,13 @@ class EvaluationPlugin(Plugin):
         type=str,
         help="Path to the RVIZ configuration file",
         default=_rospack.get_path("virtual_maize_field") + "/rviz/config.rviz",
+    )
+    parser.add_argument(
+        "--task",
+        type=str,
+        help="Current competition task.",
+        choices=["navigation", "mapping"],
+        default="from_memory",
     )
     parser.add_argument(
         "--no_lookup_robot_name",
@@ -95,6 +103,7 @@ class EvaluationPlugin(Plugin):
         self._update_clock_timer.start()
 
         self.start_time = rospy.Time.now()
+        self.bonus_seconds = 0
 
     def setup_ui(self) -> QWidget:
         widget = QWidget()
@@ -163,9 +172,15 @@ class EvaluationPlugin(Plugin):
         self.play_pause_button.clicked.connect(self._toggle_play_pause)
         grid.addWidget(self.play_pause_button, 0, 4)
 
+        # Add button to give bonus time
+        self._add_time_button = QPushButton("Add bonus time")
+        self._add_time_button.clicked.connect(self._add_time)
+        grid.addWidget(self._add_time_button, 1, 4)
+
+        # Add compare maps buttons
         self._compare_maps_button = QPushButton("Show maps")
         self._compare_maps_button.clicked.connect(self._compare_maps)
-        grid.addWidget(self._compare_maps_button, 1, 4)
+        grid.addWidget(self._compare_maps_button, 2, 4)
 
         layout.addLayout(grid)
 
@@ -199,8 +214,9 @@ class EvaluationPlugin(Plugin):
             self.last_time = now
 
             elapsed_seconds = (rospy.Time.now() - self.start_time).to_sec()
-            remaining_time = int(
-                round(self.settings["task_time_seconds"] - elapsed_seconds)
+            remaining_time = (
+                int(round(self.settings["task_time_seconds"] - elapsed_seconds))
+                + self.bonus_seconds
             )
             self.remaining_time_widget.display(
                 f"{remaining_time//60:02}:{remaining_time%60:02}"
@@ -222,8 +238,13 @@ class EvaluationPlugin(Plugin):
         dlg = ShowMapDialog(self._widget)
         dlg.showMaximized()
 
-    def _hide_unhide_maps_button(self) -> None:
-        self._compare_maps_button.setVisible(self.settings["show_compare_maps_button"])
+    def _add_time(self) -> None:
+        rospy.loginfo(f"Adding bonus time (total +{self.bonus_seconds}s)")
+        self.bonus_seconds += self.settings["bonus_time_seconds"]
+
+    def _hide_unhide_task_mapping_buttons(self) -> None:
+        self._compare_maps_button.setVisible(self.args.task == "mapping")
+        self._add_time_button.setVisible(self.args.task == "mapping")
 
     def shutdown_plugin(self) -> None:
         self._count_subscriber.unregister()
@@ -237,7 +258,7 @@ class EvaluationPlugin(Plugin):
         for setting_name in (
             "task_time_seconds",
             "stop_simulation_automatically",
-            "show_compare_maps_button",
+            "bonus_time_seconds",
         ):
             plugin_settings.set_value(setting_name, self.settings[setting_name])
 
@@ -248,18 +269,18 @@ class EvaluationPlugin(Plugin):
             (
                 "task_time_seconds",
                 "stop_simulation_automatically",
-                "show_compare_maps_button",
+                "bonus_time_seconds",
             ),
-            ("180", "true", "true"),
+            ("180", "true", "30"),
         ):
             self.settings[setting_name] = convert_to_python(
                 plugin_settings.value(setting_name, default_value)
             )
 
-        self._hide_unhide_maps_button()
+        self._hide_unhide_task_mapping_buttons()
 
     def trigger_configuration(self) -> None:
-        dlg = SettingsDialog(self._widget, self.settings)
+        dlg = SettingsDialog(self._widget, self.settings, self.args)
         if dlg.exec():
             rospy.loginfo("Apply and save settings.")
             t = dlg.max_time_widget.time().toPyTime()
@@ -269,8 +290,12 @@ class EvaluationPlugin(Plugin):
             self.settings[
                 "stop_simulation_automatically"
             ] = dlg.stop_automatically_checkbox.isChecked()
-            self.settings[
-                "show_compare_maps_button"
-            ] = dlg.show_compare_maps_button.isChecked()
+            t = dlg.bonus_time_seconds_widget.time().toPyTime()
+            self.settings["bonus_time_seconds"] = (
+                t.hour * 60 + t.minute
+            ) * 60 + t.second
 
-        self._hide_unhide_maps_button()
+            # Override task
+            self.args.task = dlg.current_task_widget.currentText()
+
+        self._hide_unhide_task_mapping_buttons()
