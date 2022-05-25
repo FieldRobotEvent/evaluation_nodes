@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from argparse import ArgumentParser
 from json import loads as convert_to_python
-from secrets import choice
 
 import rospy
 from qt_gui.plugin import Plugin
