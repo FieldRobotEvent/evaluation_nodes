@@ -8,5 +8,13 @@
         "${workspaceFolder}/../devel/lib/python3/dist-packages",
         "${workspaceFolder}/../devel/lib/python3/dist-packages",
         "/opt/ros/${ROS_DISTRO}/lib/python3/dist-packages"
-    ]
+    ],
+    "python.analysis.autoImportCompletions": false,
+    "editor.formatOnSave": true,
+    "python.formatting.provider": "black",
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
+    }
 }
