@@ -151,7 +151,7 @@ class ShowMapDialog(QDialog):
 
         self.setup_ui()
 
-        gt_map_file = Path(_rospack.get_path("virtual_maize_field")) / "map/map.csv"
+        gt_map_file = Path(_rospack.get_path("virtual_maize_field")) / "gt/map.csv"
         pred_map_file = (
             Path(_rospack.get_path("virtual_maize_field")) / "map/pred_map.csv"
         )
