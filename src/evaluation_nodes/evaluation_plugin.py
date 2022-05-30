@@ -48,7 +48,7 @@ class EvaluationPlugin(Plugin):
         type=str,
         help="Current competition task.",
         choices=["navigation", "mapping"],
-        default="from_memory",
+        default="navigation",
     )
     parser.add_argument(
         "--no_lookup_robot_name",
