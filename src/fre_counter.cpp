@@ -22,6 +22,7 @@ namespace fre_counter
         path_msg.header.stamp = ros::Time::now();
 
         robot_name = getRobotName();
+        start_time = ros::Time::now();
 
         // Create publishers
         real_path_publisher_ = nh_.advertise<nav_msgs::Path>("real_robot_path", 1);
@@ -36,7 +37,7 @@ namespace fre_counter
     }
 
     // Check if actual orientation is switched at the headland returns rel rotation in degree
-    double FRE_Counter::getRelRotation(geometry_msgs::Pose last, geometry_msgs::Pose actual)
+    std::tuple<double, double, double> FRE_Counter::getRelativeRotation(geometry_msgs::Pose last, geometry_msgs::Pose actual)
     {
         // Check relative rotation between the quaternions
         tf2::Quaternion a, b, c;
@@ -44,14 +45,16 @@ namespace fre_counter
         tf2::convert(actual.orientation, b);
 
         c = b * a.inverse(); // Calculate relative rotation
-        // Convert yaw to degrees
         tf2::Matrix3x3 m(c);
 
-        double roll, pitch, yaw;
-        m.getRPY(roll, pitch, yaw);
-        yaw = yaw * (180.0 / M_PI); // Convert to degree;
+        double r, p, y;
+        m.getRPY(r, p, y);
+        // Convert to degree
+        r = r * (180.0 / M_PI); 
+        p = p * (180.0 / M_PI); 
+        y = y * (180.0 / M_PI); 
 
-        return yaw;
+        return {r, p, y};
     }
 
     //------subscribers----------
@@ -67,7 +70,8 @@ namespace fre_counter
         // std::cout<<"got state of: "<<msg->name.size() <<" objects in gazebo"<<std::endl;
 
         int plant_counter = 0;
-        int moved_plants = 0;
+        int destroyed_plants = 0;
+
         for (int i = 0; i < msg->name.size(); i++)
         {
             // check for plants
@@ -77,13 +81,12 @@ namespace fre_counter
                 plant_counter++;
                 if (got_first_model_stages) // Check if we can compare something until now
                 {
-                    // Check if plant changed position since first stage
-                    float plant_dist = sqrt((msg->pose[i].position.x - start_model_stages.pose[i].position.x) * (msg->pose[i].position.x - start_model_stages.pose[i].position.x) + (msg->pose[i].position.y - start_model_stages.pose[i].position.y) * (msg->pose[i].position.y - start_model_stages.pose[i].position.y));
-
-                    if (plant_dist > 0.01) // If plant was moved more than x cm //maybe include here later the orientation of the stem?
+                    // If plant rotated more than 45.1 degrees, the plants should flip over and are destroyed.
+                    double r, p, y;
+                    std::tie(r, p, y) = getRelativeRotation(start_model_stages.pose[i], msg->pose[i]);
+                    if (std::abs(r) > 45.1 || std::abs(p) > 45.1)
                     {
-                        // std::cout<<"the plant nr. "<<i<<" was moved!"<<std::endl;
-                        moved_plants++;
+                        destroyed_plants++;
                     }
                 }
             }
@@ -122,8 +125,9 @@ namespace fre_counter
                 }
 
                 // Check if we detected a headland turn.
-                double rel_rotation = getRelRotation(last_robot_pose, robot_start_pose);
-                rel_rotation = sqrt(rel_rotation * rel_rotation); // get abs value
+                double r, p, y;
+                std::tie(r, p, y) = getRelativeRotation(last_robot_pose, robot_start_pose);
+                double rel_rotation = std::abs(y);
                 std::cout << "robot pose x:" << msg->pose[i].position.x << " y:" << msg->pose[i].position.y << "  rel rot: " << rel_rotation << " [°]" << std::endl;
 
                 if (rel_rotation > 70 && rel_rotation < 160) // check if we are right now on the headland turn:
@@ -151,7 +155,7 @@ namespace fre_counter
                 info_msg.robot_distance = dist_robot_travel;
             }
         }
-        std::cout << "Plants destroyed: " << moved_plants << std::endl
+        std::cout << "Plants destroyed: " << destroyed_plants << std::endl
                   << std::endl;
 
         if (!found_robot)
@@ -159,17 +163,19 @@ namespace fre_counter
             ROS_WARN_STREAM_THROTTLE(5, "Couldn't find '" << robot_name << "' in names of topic /gazebo/ModelStates");
         }
 
-        info_msg.plants_destroyed = moved_plants;
+        info_msg.plants_destroyed = destroyed_plants;
 
         // Publish path and info
         info_publisher_.publish(info_msg);
         real_path_publisher_.publish(path_msg);
 
         // Check if this is the first topic recieved. if yes, save it globaly for future comparison.
-        if (!got_first_model_stages)
+        if (!got_first_model_stages & ros::Time::now() - start_time > ros::Duration(1.0))
         {
             got_first_model_stages = true;
             start_model_stages = *msg;
+
+            ROS_INFO_STREAM("Sampled initial model states!");
         }
     }
 

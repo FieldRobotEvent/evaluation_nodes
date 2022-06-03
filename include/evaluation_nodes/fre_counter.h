@@ -1,12 +1,15 @@
 #ifndef FRE_COUNTER_H
 #define FRE_COUNTER_H
 
+#include <tuple>
+
 #include <ros/ros.h>
 #include <urdf/model.h>
 #include <gazebo_msgs/ModelStates.h>
 #include <geometry_msgs/Pose.h>
 #include <nav_msgs/Path.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 #include <evaluation_nodes/Count.h>
 
 // reads the actual mode and change and actuate everything as neccessary for task 1
@@ -29,7 +32,7 @@ namespace fre_counter
 		~FRE_Counter();
 
 		std::string getRobotName();
-		double getRelRotation(geometry_msgs::Pose last, geometry_msgs::Pose actual);
+		std::tuple<double, double, double> getRelativeRotation(geometry_msgs::Pose last, geometry_msgs::Pose actual);
 		void readModelStates(const gazebo_msgs::ModelStates::ConstPtr &msg);
 
 	private:
@@ -47,6 +50,7 @@ namespace fre_counter
 		float dist_robot_travel, actual_row;
 		int row_counter;
 		std::string robot_name;
+		ros::Time start_time;
 	};
 
 }
