@@ -215,8 +215,6 @@ class FieldMap:
         with csv_path.open("r") as fs:
             reader = csv_reader(fs)
 
-            next(reader)  # skip header
-
             objects = {
                 "location_marker_a": np.array([]).reshape(0, 2),
                 "location_marker_b": np.array([]).reshape(0, 2),
@@ -226,7 +224,11 @@ class FieldMap:
             }
 
             try:
-                for line in reader:
+                for i, line in enumerate(reader):
+                    # Skip header
+                    if i == 0 and line[0].lower() == "x":
+                        continue
+
                     if line[2] in list(objects.keys()):
                         xy = np.array([[float(line[0]), float(line[1])]])
                         objects[line[2]] = np.concatenate((objects[line[2]], xy))
