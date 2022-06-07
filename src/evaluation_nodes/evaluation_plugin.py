@@ -8,6 +8,7 @@ from qt_gui.plugin import Plugin
 from qt_gui.plugin_context import PluginContext
 from qt_gui.settings import Settings
 from rospkg import RosPack
+from rosservice import get_service_list
 from std_srvs.srv import Empty
 
 from python_qt_binding.QtCore import Qt, QTimer
@@ -28,6 +29,7 @@ from evaluation_nodes.evaluation_plugin_widgets.settings import SettingsDialog
 from evaluation_nodes.msg import Count
 
 _rospack = RosPack()
+_gazebo_timeout = 120  # seconds
 
 
 class EvaluationPlugin(Plugin):
@@ -69,20 +71,10 @@ class EvaluationPlugin(Plugin):
             rospy.loginfo(f"Arguments: {self.args}")
             rospy.loginfo(f"Unknown arguments: {unknowns}")
 
+        self.wait_for_gazebo()
+
         self._pause_client = rospy.ServiceProxy("/gazebo/pause_physics", Empty)
         self._play_client = rospy.ServiceProxy("/gazebo/unpause_physics", Empty)
-
-        try:
-            self._pause_client.wait_for_service(timeout=10)
-            self._play_client.wait_for_service(timeout=10)
-        except rospy.ROSException:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("Could not connect to Gazebo")
-            msg.setInformativeText("Did you launched the Gazebo environment?")
-            msg.setWindowTitle("Error")
-            msg.exec_()
-            exit(1)
 
         self._widget = self.setup_ui()
 
@@ -298,3 +290,29 @@ class EvaluationPlugin(Plugin):
             self.args.task = dlg.current_task_widget.currentText()
 
         self._hide_unhide_task_mapping_buttons()
+
+    @staticmethod
+    def wait_for_gazebo() -> None:
+        rate = rospy.Rate(2)
+        start_time = rospy.Time.now()
+
+        while not rospy.is_shutdown():
+            rospy.loginfo_once("Waiting for Gazebo to show up...")
+
+            srv_list = get_service_list()
+
+            if (
+                "/gazebo/pause_physics" in srv_list
+                and "/gazebo/unpause_physics" in srv_list
+            ):
+                break
+
+            if rospy.Time.now() - start_time > rospy.Duration(secs=_gazebo_timeout):
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Could not connect to Gazebo")
+                msg.setInformativeText("Did you launched the Gazebo environment?")
+                msg.setWindowTitle("Error")
+                msg.exec_()
+
+            rate.sleep()
