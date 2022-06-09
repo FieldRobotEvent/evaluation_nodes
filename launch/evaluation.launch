@@ -8,5 +8,5 @@
     <node pkg="evaluation_nodes" type="detection_spawner.py" name="detection_spawner" if="$(eval arg('task') == 'mapping')" />
 
     <!-- Launch RQT -->
-    <node pkg="rqt_gui" type="rqt_gui" name="dashboard" args="--standalone evaluation_nodes/Evaluation --args --rviz_config '$(find virtual_maize_field)/rviz/config.rviz' --task $(arg task)" output="screen" />
+    <node pkg="rqt_gui" type="rqt_gui" name="dashboard" args="--standalone evaluation_nodes/Evaluation --args --rviz_config '$(find virtual_maize_field)/rviz/config.rviz' --task $(arg task) --save_stats" output="screen" />
 </launch>

@@ -222,7 +222,7 @@ class ShowMapDialog(QDialog):
             figsize=(10, 10),
         )
         output_file = (
-            Path(_rospack.get_path("virtual_maize_field")) / "map/mapping_results.png"
+            Path(_rospack.get_path("virtual_maize_field")) / "gt/mapping_results.png"
         )
         fig.savefig(str(output_file), dpi=600)
 
