@@ -79,12 +79,15 @@ class EvaluationPlugin(Plugin):
             rospy.loginfo(f"Arguments: {self.args}")
             rospy.loginfo(f"Unknown arguments: {unknowns}")
 
-        self.wait_for_gazebo()
-
         self._pause_client = rospy.ServiceProxy("/gazebo/pause_physics", Empty)
         self._play_client = rospy.ServiceProxy("/gazebo/unpause_physics", Empty)
 
         self._widget = self.setup_ui()
+
+        self._check_gazebo_status_timer = QTimer(self)
+        self._check_gazebo_status_timer.setInterval(500)
+        self._check_gazebo_status_timer.timeout.connect(self._check_gazebo_status)
+        self._check_gazebo_status_timer.start()
 
         if context.serial_number() > 1:
             self._widget.setWindowTitle(
@@ -187,6 +190,7 @@ class EvaluationPlugin(Plugin):
         # Pause and play button
         self.play_pause_button = QPushButton("Play")
         self.play_pause_button.clicked.connect(self._toggle_play_pause)
+        self.play_pause_button.setEnabled(False)
         grid.addWidget(self.play_pause_button, 0, 4)
 
         # Add button to give bonus time
@@ -248,7 +252,7 @@ class EvaluationPlugin(Plugin):
 
             if self.settings["stop_simulation_automatically"] and remaining_time <= 0:
                 rospy.loginfo("Stopped simulation because time limit is reached!")
-                self._pause()
+                self._pause_client.call()
                 self._update_clock_timer.stop()
 
     def _toggle_play_pause(self) -> None:
@@ -283,6 +287,25 @@ class EvaluationPlugin(Plugin):
                 ]
             )
         self._stats_file_stream.flush()
+
+    def _check_gazebo_status(self) -> None:
+        srv_list = get_service_list()
+
+        if (
+            "/gazebo/pause_physics" in srv_list
+            and "/gazebo/unpause_physics" in srv_list
+        ):
+            self._check_gazebo_status_timer.stop()
+            self.play_pause_button.setEnabled(True)
+            self.start_time = rospy.Time.now()
+            rospy.loginfo("Connected to Gazebo!")
+        elif rospy.Time.now() - self.start_time > rospy.Duration(secs=_gazebo_timeout):
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Could not connect to Gazebo")
+            msg.setInformativeText("Did you launched the Gazebo environment?")
+            msg.setWindowTitle("Error")
+            msg.exec_()
 
     def shutdown_plugin(self) -> None:
         self._stats_file_stream.close()
@@ -338,29 +361,3 @@ class EvaluationPlugin(Plugin):
             self.args.task = dlg.current_task_widget.currentText()
 
         self._hide_unhide_task_mapping_buttons()
-
-    @staticmethod
-    def wait_for_gazebo() -> None:
-        rate = rospy.Rate(2)
-        start_time = rospy.Time.now()
-
-        while not rospy.is_shutdown():
-            rospy.loginfo_once("Waiting for Gazebo to show up...")
-
-            srv_list = get_service_list()
-
-            if (
-                "/gazebo/pause_physics" in srv_list
-                and "/gazebo/unpause_physics" in srv_list
-            ):
-                break
-
-            if rospy.Time.now() - start_time > rospy.Duration(secs=_gazebo_timeout):
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText("Could not connect to Gazebo")
-                msg.setInformativeText("Did you launched the Gazebo environment?")
-                msg.setWindowTitle("Error")
-                msg.exec_()
-
-            rate.sleep()
