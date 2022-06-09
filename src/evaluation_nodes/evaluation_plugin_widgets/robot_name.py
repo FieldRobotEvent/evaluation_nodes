@@ -17,9 +17,9 @@ class RobotNameWidget(QLabel):
             )
             rate.sleep()
 
-        robot_name = URDF.from_parameter_server().name
+        self.robot_name = URDF.from_parameter_server().name
 
-        super().__init__(robot_name)
+        super().__init__(self.robot_name)
 
         self.setFont(QFont("Arial", 25))
         self.setAlignment(Qt.AlignCenter)

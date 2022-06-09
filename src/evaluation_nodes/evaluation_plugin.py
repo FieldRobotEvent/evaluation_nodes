@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from argparse import ArgumentParser
+from csv import writer as csv_writer
 from json import loads as convert_to_python
+from pathlib import Path
 
 import rospy
 from qt_gui.plugin import Plugin
@@ -57,6 +59,11 @@ class EvaluationPlugin(Plugin):
         action="store_true",
         help="Disable loopup robot name from parameter server.",
     )
+    parser.add_argument(
+        "--save_stats",
+        action="store_true",
+        help="Save statistics every second.",
+    )
 
     def __init__(self, context: PluginContext) -> None:
         super().__init__(context)
@@ -64,6 +71,7 @@ class EvaluationPlugin(Plugin):
         self.settings = {}
         self.last_time = rospy.Time.now()
         self.paused = True
+        self.robot_name = ""
 
         # Parse optional arguments
         self.args, unknowns = EvaluationPlugin.parser.parse_known_args(context.argv())
@@ -88,6 +96,23 @@ class EvaluationPlugin(Plugin):
             "fre_counter/info", Count, self._count_callback
         )
 
+        self._stats_file_stream = (
+            Path(_rospack.get_path("virtual_maize_field")) / "gt/stats.csv"
+        ).open(mode="w")
+        self._stats_file_writer = csv_writer(self._stats_file_stream)
+        self._stats_file_writer.writerow(
+            [
+                "seconds_from_start",
+                "robot_name",
+                "destroyed_plants",
+                "number_of_rows",
+                "distance",
+                "distance_in_row",
+            ]
+        )
+        self._current_stats: Count | None = None
+        self._prev_stats_time = rospy.Time.now()
+
         self._update_clock_timer = QTimer(self)
         self._update_clock_timer.setInterval(100)
         self._update_clock_timer.timeout.connect(self._clock_callback)
@@ -106,6 +131,7 @@ class EvaluationPlugin(Plugin):
         # Add robot name widget
         if not self.args.no_lookup_robot_name:
             robot_name_widget = RobotNameWidget()
+            self.robot_name = robot_name_widget.robot_name
             layout.addWidget(robot_name_widget)
 
         grid = QGridLayout()
@@ -182,12 +208,19 @@ class EvaluationPlugin(Plugin):
         return widget
 
     def _count_callback(self, msg: Count) -> None:
+        if self.args.save_stats:
+            self._current_stats = msg
+
         self._hit_plant_widget.display(f"{msg.plants_destroyed:05}")
         self._distance_widget.display(f"{msg.robot_distance:05.1f}")
         self._distance_in_row_widget.display(f"{msg.robot_distance_in_row:05.1f}")
 
     def _clock_callback(self) -> None:
         now = rospy.Time.now()
+
+        if now - self._prev_stats_time > rospy.Duration(secs=1):
+            self._save_stats(now)
+            self._prev_stats_time = now
 
         if self.last_time == now and not self.paused:
             self.paused = True
@@ -237,7 +270,22 @@ class EvaluationPlugin(Plugin):
         self._compare_maps_button.setVisible(self.args.task == "mapping")
         self._add_time_button.setVisible(self.args.task == "mapping")
 
+    def _save_stats(self, current_time: rospy.Time) -> None:
+        if self._current_stats is not None:
+            self._stats_file_writer.writerow(
+                [
+                    (current_time - self.start_time).to_sec(),
+                    self.robot_name,
+                    self._current_stats.plants_destroyed,
+                    self._current_stats.rows_finished,
+                    self._current_stats.robot_distance,
+                    self._current_stats.robot_distance_in_row,
+                ]
+            )
+        self._stats_file_stream.flush()
+
     def shutdown_plugin(self) -> None:
+        self._stats_file_stream.close()
         self._count_subscriber.unregister()
         self._update_clock_timer.stop()
         self._play_client.close()
