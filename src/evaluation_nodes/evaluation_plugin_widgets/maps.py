@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from io import BytesIO
 from pathlib import Path
 
 import numpy as np
@@ -222,11 +221,12 @@ class ShowMapDialog(QDialog):
             litter_score,
             figsize=(10, 10),
         )
-        img_buffer = BytesIO()
-        fig.savefig(img_buffer, dpi=600)
-        img_buffer.seek(0)
+        output_file = (
+            Path(_rospack.get_path("virtual_maize_field")) / "map/mapping_results.png"
+        )
+        fig.savefig(str(output_file), dpi=600)
 
-        image = QImage.fromData(img_buffer.read())
+        image = QImage(str(output_file))
         pixmap = QPixmap.fromImage(image)
         self.progress_bar.hide()
         self.image_viewer.show()
