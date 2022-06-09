@@ -278,7 +278,7 @@ class EvaluationPlugin(Plugin):
         if self._current_stats is not None:
             self._stats_file_writer.writerow(
                 [
-                    (current_time - self.start_time).to_sec(),
+                    round((current_time - self.start_time).to_sec(), 3),
                     self.robot_name,
                     self._current_stats.plants_destroyed,
                     self._current_stats.rows_finished,
