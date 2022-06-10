@@ -6,7 +6,6 @@ from pathlib import Path
 
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial import distance_matrix
 
@@ -31,7 +30,7 @@ class FieldMap:
         matches = linear_sum_assignment(distances)
 
         for a_match, b_match in zip(*matches):
-            distance = distances[a_match, b_match]
+            distance = distances[a_match, b_match] * 100
 
             if distance <= 2.0:
                 score += 15
@@ -61,7 +60,13 @@ class FieldMap:
         plt.plot()
         plt.figure(figsize=figsize)
         plt.gca().axis("equal")
-        labels = []
+
+        _labels = []
+        _lines = []
+
+        def _add_objects(objects: np.ndarray, legend: str, **kwargs) -> None:
+            _lines.append(plt.scatter(objects[:, 0], objects[:, 1], **kwargs))
+            _labels.append(legend)
 
         # Add crop visualisation
         if self.objects["crop"].shape[0] > 0:
@@ -69,12 +74,12 @@ class FieldMap:
         else:
             crop = other.objects["crop"]
 
-        _image = plt.imread(str(Path(__file__).parent / "maize.png"))
-        self.image_scatter(crop[:, 0], crop[:, 1], _image)
-
-        def _add_objects(objects: np.ndarray, legend: str, **kwargs) -> None:
-            plt.scatter(objects[:, 0], objects[:, 1], **kwargs)
-            labels.append(legend)
+        _add_objects(
+            crop,
+            f"crop plants",
+            color="g",
+            marker=".",
+        )
 
         _add_objects(
             self.objects["weed"],
@@ -156,6 +161,13 @@ class FieldMap:
             matches: tuple[np.ndarray, np.ndarray], object_key: str
         ) -> None:
             for i, j in zip(*matches):
+                distance = np.linalg.norm(
+                    self.objects[object_key][i] - other.objects[object_key][j]
+                )
+
+                if distance > 0.375:
+                    continue
+
                 plt.plot(
                     [self.objects[object_key][i][0], other.objects[object_key][j][0]],
                     [self.objects[object_key][i][1], other.objects[object_key][j][1]],
@@ -165,20 +177,20 @@ class FieldMap:
                 )
                 plt.text(
                     *(self.objects[object_key][i] + 0.05),
-                    f"{np.linalg.norm(self.objects[object_key][i] - other.objects[object_key][j]):.2f}m",
+                    f"{distance*100:.0f} cm",
                     size=6,
                 )
 
         _draw_matches(weed_matches, "weed")
         _draw_matches(litter_matches, "litter")
 
-        plt.legend(labels)
+        plt.legend(_lines, _labels)
 
         # Draw score
         txt = (
             f"Weed score: {weed_score:.2f} \n"
             f"Litter score: {litter_score:.2f} \n"
-            f"Total score: {weed_score+litter_score:.2f}"
+            f"Total score: {max(0, weed_score+litter_score):.2f}"
         )
 
         plt.figtext(
@@ -192,23 +204,6 @@ class FieldMap:
 
         plt.grid()
         return plt
-
-    @staticmethod
-    def image_scatter(x: np.ndarray, y: np.ndarray, image: np.ndarray) -> plt:
-        ax = plt.gca()
-
-        for xi, yi in zip(x, y):
-            im = OffsetImage(image, zoom=25 / ax.figure.dpi)
-            im.image.axes = ax
-
-            ab = AnnotationBbox(
-                im,
-                (xi, yi),
-                frameon=False,
-                pad=0.0,
-            )
-
-            ax.add_artist(ab)
 
     @classmethod
     def from_csv(cls, csv_path: Path) -> FieldMap:
@@ -270,6 +265,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--out_dpi", type=int, default=300, help="DPI of the output map"
     )
+    parser.add_argument(
+        "--show_map", action="store_true", help="Show evaluation map after generation."
+    )
     args = parser.parse_args()
 
     gt = FieldMap.from_csv(args.gt_path)
@@ -283,8 +281,11 @@ if __name__ == "__main__":
     )
     fig.savefig(args.out_map, dpi=args.out_dpi)
 
-    print("Weed score: %.2f" % weed_score)
-    print("Litter score: %.2f" % litter_score)
-    print("Total score: %.2f" % (weed_score + litter_score))
+    print(f"Weed score: {weed_score:.2f}")
+    print(f"Litter score: {litter_score:.2f}")
+    print(f"Total score: {max(0, weed_score + litter_score):.2f}")
+
+    if args.show_map:
+        plt.show()
 
     exit(0)
